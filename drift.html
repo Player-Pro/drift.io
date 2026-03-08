@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Drift.io</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #080810;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100dvh;
+    overflow: hidden;
+    font-family: 'Rajdhani', sans-serif;
+    touch-action: none;
+    user-select: none;
+  }
+  canvas { display: block; }
+
+  #ui {
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  #hud {
+    position: absolute; top: 14px; left: 50%;
+    transform: translateX(-50%);
+    display: none; gap: 10px; align-items: center;
+  }
+
+  .hudChip {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 5px 16px;
+    color: #fff;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+  .hudChip span { color: #00f5ff; }
+
+  /* Boost bar */
+  #boostWrap {
+    position: absolute; bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: none; flex-direction: column;
+    align-items: center; gap: 4px;
+    width: min(200px, 65vw);
+  }
+  #boostLabel { color: rgba(255,255,255,0.25); font-size: 9px; letter-spacing: 3px; text-transform: uppercase; }
+  #boostTrack { width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+  #boostFill { height: 100%; background: linear-gradient(90deg, #00f5ff, #a855f7); border-radius: 3px; width: 100%; transition: width 0.1s; }
+
+  /* Mobile controls */
+  #mobileControls {
+    position: absolute; bottom: 60px; left: 0; right: 0;
+    display: none; justify-content: space-between;
+    padding: 0 30px; pointer-events: all;
+  }
+  .turnBtn {
+    width: 70px; height: 70px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.5); font-size: 26px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #boostBtn {
+    width: 70px; height: 70px;
+    background: rgba(0,245,255,0.08);
+    border: 1px solid rgba(0,245,255,0.2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(0,245,255,0.6); font-size: 22px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Screens */
+  .screen {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; pointer-events: all;
+  }
+  .screen.hidden { display: none; }
+
+  #startScreen { background: radial-gradient(ellipse at 50% 60%, #0d0d20 0%, #050508 100%); }
+
+  .title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(48px, 11vw, 90px);
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 8px;
+    text-shadow: 0 0 40px rgba(0,245,255,0.5), 0 0 80px rgba(0,245,255,0.2);
+    line-height: 1;
+  }
+  .title span { color: #00f5ff; }
+
+  .sub {
+    color: rgba(255,255,255,0.2);
+    font-size: clamp(11px, 2.5vw, 13px);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+
+  .howto {
+    color: rgba(255,255,255,0.18);
+    font-size: 13px;
+    text-align: center;
+    line-height: 2.2;
+    max-width: 300px;
+    font-family: 'Rajdhani', sans-serif;
+  }
+  .howto b { color: rgba(255,255,255,0.45); }
+
+  .startBtn {
+    pointer-events: all;
+    background: transparent;
+    border: 1px solid rgba(0,245,255,0.4);
+    color: #00f5ff;
+    padding: 13px 50px;
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-top: 10px;
+    box-shadow: 0 0 24px rgba(0,245,255,0.1), inset 0 0 24px rgba(0,245,255,0.03);
+    transition: all 0.2s;
+  }
+  .startBtn:hover { box-shadow: 0 0 40px rgba(0,245,255,0.3); background: rgba(0,245,255,0.05); }
+  .startBtn.ghost { border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.25); font-size: 11px; padding: 9px 32px; }
+
+  #overScreen { background: rgba(0,0,8,0.88); backdrop-filter: blur(10px); }
+  .overTitle { font-family: 'Orbitron', monospace; font-size: clamp(28px,6vw,50px); font-weight: 900; color: #fff; }
+  .statsRow { display: flex; gap: 12px; }
+  .sCard {
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 12px 24px; text-align: center;
+  }
+  .sCard .sl { color: rgba(255,255,255,0.2); font-size: 9px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+  .sCard .sv { font-family: 'Orbitron', monospace; font-size: 28px; color: #00f5ff; }
+
+  /* Kill feed */
+  #killFeed {
+    position: absolute; top: 60px; right: 14px;
+    display: flex; flex-direction: column; gap: 4px;
+    pointer-events: none;
+  }
+  .killMsg {
+    background: rgba(0,0,0,0.5);
+    border-left: 2px solid #00f5ff;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.5px;
+    animation: fadeKill 2.5s forwards;
+  }
+  @keyframes fadeKill { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div class="hudChip">KILLS <span id="killsVal">0</span></div>
+    <div class="hudChip">ALIVE <span id="aliveVal">0</span></div>
+    <div class="hudChip">LENGTH <span id="lengthVal">0</span></div>
+  </div>
+  <div id="killFeed"></div>
+  <div id="boostWrap">
+    <div id="boostLabel">boost</div>
+    <div id="boostTrack"><div id="boostFill"></div></div>
+  </div>
+  <div id="mobileControls">
+    <div class="turnBtn" id="leftBtn">◀</div>
+    <div id="boostBtn">⚡</div>
+    <div class="turnBtn" id="rightBtn">▶</div>
+  </div>
+
+  <!-- Start -->
+  <div class="screen" id="startScreen">
+    <div class="title">DRI<span>FT</span></div>
+    <div class="sub">leave your mark · trap them all</div>
+    <div class="howto">
+      <b>Arrow keys / WASD</b> to steer<br>
+      <b>Space</b> to boost<br>
+      <b>Crash into trails</b> to eliminate others<br>
+      Don't touch your own trail
+    </div>
+    <button class="startBtn" id="startBtn">RACE IN</button>
+  </div>
+
+  <!-- Over -->
+  <div class="screen hidden" id="overScreen">
+    <div class="overTitle" id="overTitle">WRECKED</div>
+    <div class="statsRow">
+      <div class="sCard"><div class="sl">Kills</div><div class="sv" id="finalKills">0</div></div>
+      <div class="sCard"><div class="sl">Survived</div><div class="sv" id="finalTime">0s</div></div>
+      <div class="sCard"><div class="sl">Trail</div><div class="sv" id="finalLength">0</div></div>
+    </div>
+    <button class="startBtn" id="retryBtn">RETRY</button>
+    <button class="startBtn ghost" id="menuBtn">MENU</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const isMobile = navigator.maxTouchPoints > 1 || /Mobi|Android/i.test(navigator.userAgent);
+
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ── Constants ──
+const SPEED       = 2.8;
+const BOOST_SPEED = 5.2;
+const TURN_RATE   = 0.055;
+const TRAIL_GAP   = 3; // leave gap at tail for safe start
+
+// ── State ──
+let state = 'start';
+let player, bots, particles, startTime, kills;
+let keys = {};
+let leftHeld = false, rightHeld = false, boostHeld = false;
+
+// ── Colors ──
+const BOT_COLORS = ['#f87171','#fb923c','#facc15','#a78bfa','#f472b6','#4ade80','#38bdf8'];
+const PLAYER_COLOR = '#00f5ff';
+
+// ── Input ──
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+const leftBtn  = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const boostBtn = document.getElementById('boostBtn');
+leftBtn.addEventListener('touchstart',  e => { e.preventDefault(); leftHeld  = true;  }, { passive: false });
+leftBtn.addEventListener('touchend',    e => { e.preventDefault(); leftHeld  = false; }, { passive: false });
+rightBtn.addEventListener('touchstart', e => { e.preventDefault(); rightHeld = true;  }, { passive: false });
+rightBtn.addEventListener('touchend',   e => { e.preventDefault(); rightHeld = false; }, { passive: false });
+boostBtn.addEventListener('touchstart', e => { e.preventDefault(); boostHeld = true;  }, { passive: false });
+boostBtn.addEventListener('touchend',   e => { e.preventDefault(); boostHeld = false; }, { passive: false });
+
+// ── Init ──
+function initGame() {
+  kills = 0;
+  startTime = Date.now();
+
+  player = makePlayer(W/2, H/2, Math.random()*Math.PI*2, PLAYER_COLOR, true);
+
+  bots = [];
+  const botCount = 6;
+  for (let i = 0; i < botCount; i++) {
+    const angle = (i/botCount)*Math.PI*2;
+    const r = Math.min(W,H)*0.32;
+    bots.push(makePlayer(
+      W/2 + Math.cos(angle)*r,
+      H/2 + Math.sin(angle)*r,
+      angle + Math.PI/2,
+      BOT_COLORS[i % BOT_COLORS.length],
+      false
+    ));
+  }
+
+  particles = [];
+
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('boostWrap').style.display = 'flex';
+  if (isMobile) document.getElementById('mobileControls').style.display = 'flex';
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+  state = 'play';
+}
+
+function makePlayer(x, y, angle, color, isPlayer) {
+  return {
+    x, y, angle,
+    color, isPlayer,
+    alive: true,
+    trail: [],        // [{x,y}]
+    speed: SPEED,
+    boost: 100,
+    boostActive: false,
+    // Bot AI
+    turnDir: 0,
+    thinkTimer: 0,
+    avoidAngle: null,
+    length: 0,
+    invincible: 40   // frames of invincibility at start
+  };
+}
+
+// ── Bot AI ──
+function botThink(bot, allTrails) {
+  bot.thinkTimer--;
+  if (bot.thinkTimer > 0) return;
+  bot.thinkTimer = 8 + Math.floor(Math.random()*12);
+
+  // Look ahead for danger
+  const lookDist = 60;
+  let danger = false;
+  for (let d = 15; d < lookDist; d += 8) {
+    const lx = bot.x + Math.cos(bot.angle)*d;
+    const ly = bot.y + Math.sin(bot.angle)*d;
+    // Wall
+    if (lx < 20 || lx > W-20 || ly < 20 || ly > H-20) { danger = true; break; }
+    // Any trail
+    for (const t of allTrails) {
+      for (let i = 0; i < t.length - TRAIL_GAP*2; i++) {
+        if (Math.hypot(lx-t[i].x, ly-t[i].y) < 8) { danger = true; break; }
+      }
+      if (danger) break;
+    }
+    if (danger) break;
+  }
+
+  if (danger) {
+    // Turn away
+    bot.turnDir = Math.random() < 0.5 ? -1 : 1;
+    bot.thinkTimer = 20;
+  } else {
+    // Slight random drift
+    bot.turnDir = (Math.random()-0.5)*2;
+    if (Math.random() < 0.15) bot.boostActive = bot.boost > 30;
+  }
+}
+
+// ── Collision check ──
+function checkHit(x, y, trails, selfTrail, isPlayer) {
+  // Walls
+  if (x < 6 || x > W-6 || y < 6 || y > H-6) return true;
+  // Trails
+  for (const t of trails) {
+    const isSelf = t === selfTrail;
+    const end = isSelf ? t.length - TRAIL_GAP*12 : t.length;
+    for (let i = 0; i < end; i++) {
+      if (Math.hypot(x-t[i].x, y-t[i].y) < 5) return true;
+    }
+  }
+  return false;
+}
+
+// ── Update ──
+function update() {
+  if (state !== 'play') return;
+
+  const allTrails = [player, ...bots].filter(p=>p.alive).map(p=>p.trail);
+
+  // ── Player ──
+  if (player.alive) {
+    const left  = keys['ArrowLeft']  || keys['KeyA'] || leftHeld;
+    const right = keys['ArrowRight'] || keys['KeyD'] || rightHeld;
+    const boost = keys['Space'] || keys['ShiftLeft'] || boostHeld;
+
+    if (left)  player.angle -= TURN_RATE;
+    if (right) player.angle += TURN_RATE;
+
+    player.boostActive = boost && player.boost > 0;
+    if (player.boostActive) { player.boost = Math.max(0, player.boost-0.8); }
+    else if (player.boost < 100) player.boost += 0.25;
+
+    const spd = player.boostActive ? BOOST_SPEED : SPEED;
+    player.x += Math.cos(player.angle)*spd;
+    player.y += Math.sin(player.angle)*spd;
+    player.trail.push({x:player.x, y:player.y});
+    player.length = player.trail.length;
+    if (player.invincible > 0) player.invincible--;
+
+    if (player.invincible === 0 && checkHit(player.x, player.y, allTrails, player.trail, true)) {
+      killPlayer(player, '💥 YOU CRASHED');
+    }
+
+    document.getElementById('boostFill').style.width = player.boost + '%';
+  }
+
+  // ── Bots ──
+  for (const bot of bots) {
+    if (!bot.alive) continue;
+    botThink(bot, allTrails);
+    bot.angle += TURN_RATE * bot.turnDir;
+    if (bot.boostActive && bot.boost > 0) { bot.boost = Math.max(0,bot.boost-0.5); }
+    else { bot.boostActive = false; if (bot.boost<100) bot.boost+=0.2; }
+    const spd = bot.boostActive ? BOOST_SPEED : SPEED;
+    bot.x += Math.cos(bot.angle)*spd;
+    bot.y += Math.sin(bot.angle)*spd;
+    bot.trail.push({x:bot.x, y:bot.y});
+    bot.length = bot.trail.length;
+    if (bot.invincible > 0) { bot.invincible--; continue; }
+    if (checkHit(bot.x, bot.y, allTrails, bot.trail, false)) {
+      // Check if player's trail killed them
+      const hitPlayer = player.alive && bot.trail !== player.trail &&
+        player.trail.slice(0, player.trail.length-TRAIL_GAP*12).some(
+          pt => Math.hypot(bot.x-pt.x, bot.y-pt.y) < 5
+        );
+      killPlayer(bot, hitPlayer ? `${bot.color} eliminated` : null, hitPlayer);
+    }
+  }
+
+  // ── Particles ──
+  for (let i = particles.length-1; i>=0; i--) {
+    const p = particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vx*=0.94; p.vy*=0.94; p.life-=0.025;
+    if (p.life<=0) particles.splice(i,1);
+  }
+
+  // ── HUD ──
+  const alive = bots.filter(b=>b.alive).length + (player.alive?1:0);
+  document.getElementById('killsVal').textContent  = kills;
+  document.getElementById('aliveVal').textContent  = alive;
+  document.getElementById('lengthVal').textContent = Math.floor((player.trail.length||0)/10);
+
+  // Win condition
+  if (player.alive && bots.every(b=>!b.alive)) {
+    setTimeout(()=>showOver(true), 400);
+  }
+}
+
+function killPlayer(p, msg, giveKill) {
+  p.alive = false;
+  for (let i=0;i<20;i++) {
+    const a=Math.random()*Math.PI*2, s=1+Math.random()*4;
+    particles.push({x:p.x,y:p.y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color:p.color,size:3+Math.random()*4});
+  }
+  if (giveKill) kills++;
+  if (msg) addKillMsg(msg);
+  if (!p.isPlayer) return;
+  setTimeout(()=>showOver(false), 600);
+}
+
+function addKillMsg(msg) {
+  const feed = document.getElementById('killFeed');
+  const el = document.createElement('div');
+  el.className = 'killMsg';
+  el.textContent = msg;
+  feed.appendChild(el);
+  setTimeout(()=>el.remove(), 2600);
+}
+
+function showOver(won) {
+  state = 'dead';
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('boostWrap').style.display = 'none';
+  document.getElementById('mobileControls').style.display = 'none';
+  document.getElementById('overTitle').textContent = won ? 'LAST DRIVER 🏆' : 'WRECKED 💥';
+  const elapsed = Math.floor((Date.now()-startTime)/1000);
+  document.getElementById('finalKills').textContent  = kills;
+  document.getElementById('finalTime').textContent   = elapsed + 's';
+  document.getElementById('finalLength').textContent = Math.floor((player.trail.length||0)/10);
+  document.getElementById('overScreen').classList.remove('hidden');
+}
+
+document.getElementById('startBtn').addEventListener('click', initGame);
+document.getElementById('retryBtn').addEventListener('click', initGame);
+document.getElementById('menuBtn').addEventListener('click', ()=>{
+  state='start';
+  document.getElementById('hud').style.display='none';
+  document.getElementById('boostWrap').style.display='none';
+  document.getElementById('mobileControls').style.display='none';
+  document.getElementById('overScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+});
+
+// ── Draw ──
+function drawArena() {
+  // Background
+  ctx.fillStyle = '#080810';
+  ctx.fillRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  const gs = 60;
+  for (let x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for (let y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // Wall border
+  ctx.strokeStyle = 'rgba(0,245,255,0.15)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(3,3,W-6,H-6);
+  ctx.strokeStyle = 'rgba(0,245,255,0.05)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(3,3,W-6,H-6);
+}
+
+function drawTrail(trail, color, alive) {
+  if (trail.length < 2) return;
+  // Draw trail as thick glowing line segments
+  for (let i = 1; i < trail.length; i++) {
+    const alpha = Math.min(1, i/30) * (alive ? 1 : 0.5);
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.moveTo(trail[i-1].x, trail[i-1].y);
+    ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function drawRider(p) {
+  if (!p.alive) return;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle + Math.PI/2);
+
+  // Glow
+  ctx.shadowBlur = p.boostActive ? 28 : 14;
+  ctx.shadowColor = p.color;
+
+  // Body — sleek triangle
+  ctx.fillStyle = p.color;
+  ctx.beginPath();
+  ctx.moveTo(0, -9);
+  ctx.lineTo(5, 7);
+  ctx.lineTo(0, 4);
+  ctx.lineTo(-5, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Boost flame
+  if (p.boostActive) {
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.8 + Math.random()*0.2;
+    ctx.beginPath();
+    ctx.moveTo(-3, 7);
+    ctx.lineTo(3, 7);
+    ctx.lineTo(0, 7 + 8 + Math.random()*6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function draw() {
+  drawArena();
+  if (state !== 'play' && state !== 'dead') return;
+
+  // Trails
+  for (const bot of bots) drawTrail(bot.trail, bot.color, bot.alive);
+  drawTrail(player.trail, player.color, player.alive);
+
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 8; ctx.shadowColor = p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  // Riders
+  for (const bot of bots) drawRider(bot);
+  drawRider(player);
+
+  // Player arrow indicator (small)
+  if (player.alive) {
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+    ctx.strokeStyle = 'rgba(0,245,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(0,-22);
+    ctx.moveTo(0,-22); ctx.lineTo(-3,-18);
+    ctx.moveTo(0,-22); ctx.lineTo(3,-18);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
